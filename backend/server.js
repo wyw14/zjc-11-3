@@ -22,9 +22,10 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-app.get('/api/stories', (_req, res) => {
+app.get('/api/stories', (req, res) => {
   try {
-    const stories = getAllStories();
+    const tag = req.query.tag;
+    const stories = getAllStories(tag);
     res.json(stories);
   } catch (err) {
     console.error(err);
@@ -47,7 +48,7 @@ app.get('/api/stories/:id', (req, res) => {
 
 app.post('/api/stories', (req, res) => {
   try {
-    const { title, content, author } = req.body || {};
+    const { title, content, author, tags } = req.body || {};
     if (!title || !title.trim()) {
       return res.status(400).json({ error: '故事标题不能为空' });
     }
@@ -60,10 +61,17 @@ app.post('/api/stories', (req, res) => {
     if (content.length > MAX_CHARS_PER_STORY) {
       return res.status(400).json({ error: `开篇内容不能超过 ${MAX_CHARS_PER_STORY} 字` });
     }
+    if (tags && !Array.isArray(tags)) {
+      return res.status(400).json({ error: '标签格式不正确' });
+    }
+    if (tags && tags.some(t => typeof t !== 'string' || t.trim().length > 10)) {
+      return res.status(400).json({ error: '单个标签不能超过10个字符' });
+    }
     const story = createStory({
       title: title.trim(),
       content: content.trim(),
-      author: author.trim()
+      author: author.trim(),
+      tags
     });
     res.status(201).json(story);
   } catch (err) {

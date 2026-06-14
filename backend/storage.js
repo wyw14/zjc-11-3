@@ -61,6 +61,7 @@ function formatStoryDetail(story) {
   return {
     id: story.id,
     title: story.title,
+    tags: story.tags || [],
     createdAt: story.createdAt,
     updatedAt: story.updatedAt,
     entryCount: story.entries.length,
@@ -74,13 +75,17 @@ function formatStoryDetail(story) {
   };
 }
 
-export function createStory({ title, content, author }) {
+export function createStory({ title, content, author, tags }) {
   const data = readData();
   const id = generateId();
   const now = Date.now();
+  const cleanedTags = Array.isArray(tags)
+    ? tags.map(t => String(t).trim()).filter(Boolean).slice(0, 5)
+    : [];
   const story = {
     id,
     title,
+    tags: cleanedTags,
     createdAt: now,
     updatedAt: now,
     entries: [{
@@ -97,13 +102,21 @@ export function createStory({ title, content, author }) {
   return formatStoryDetail(story);
 }
 
-export function getAllStories() {
+export function getAllStories(tag) {
   const data = readData();
-  return Object.values(data.stories)
+  let stories = Object.values(data.stories);
+  if (tag) {
+    const normalizedTag = String(tag).trim().toLowerCase();
+    stories = stories.filter(s =>
+      Array.isArray(s.tags) && s.tags.some(t => t.toLowerCase() === normalizedTag)
+    );
+  }
+  return stories
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map(s => ({
       id: s.id,
       title: s.title,
+      tags: s.tags || [],
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
       entryCount: s.entries.length,

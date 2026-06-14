@@ -25,6 +25,14 @@
               {{ story.locked ? '已完结' : '接龙中' }}
             </span>
           </div>
+          <div v-if="story.tags && story.tags.length > 0" class="story-tags">
+            <span
+              v-for="t in story.tags"
+              :key="t"
+              class="tag tag-info story-tag"
+              @click="goToTag(t)"
+            >#{{ t }}</span>
+          </div>
           <div v-if="story.locked && story.lockedReason" class="lock-reason">
             🔒 {{ story.lockedReason }}
           </div>
@@ -248,6 +256,10 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+function goToTag(tag) {
+  router.push({ path: '/', query: { tag } })
+}
+
 watch(() => route.params.id, loadStory)
 onMounted(loadStory)
 </script>
@@ -282,6 +294,25 @@ onMounted(loadStory)
   font-size: 24px;
   font-weight: 700;
   line-height: 1.3;
+}
+
+.story-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.story-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  padding: 4px 12px;
+}
+
+.story-tag:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
 }
 
 .lock-reason {

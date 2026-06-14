@@ -31,30 +31,49 @@
 
       <section class="list-section">
         <div class="section-header">
-          <h2>📚 故事广场</h2>
+          <div class="section-title-row">
+            <h2>📚 故事广场</h2>
+            <div v-if="activeTag" class="active-tag-wrap">
+              <span class="active-tag-label">当前标签：</span>
+              <span class="tag tag-info active-tag">{{ activeTag }}</span>
+              <button class="clear-tag-btn" @click="clearTag">×</button>
+            </div>
+          </div>
         </div>
 
         <div v-if="loading" class="loading card">正在加载故事列表</div>
 
         <div v-else-if="stories.length === 0" class="empty card">
           <div class="empty-icon">📝</div>
-          <p>还没有故事，点击上方按钮创建第一个吧！</p>
+          <p v-if="activeTag">标签「{{ activeTag }}」下还没有故事</p>
+          <p v-else>还没有故事，点击上方按钮创建第一个吧！</p>
+          <button v-if="activeTag" class="btn-secondary" style="margin-top: 16px" @click="clearTag">
+            查看全部故事
+          </button>
         </div>
 
         <div v-else class="story-grid">
-          <router-link
+          <div
             v-for="s in stories"
             :key="s.id"
-            :to="`/story/${s.id}`"
             class="story-card"
           >
-            <div class="story-card-header">
-              <h3 class="story-title">{{ s.title }}</h3>
-              <span
-                :class="['tag', s.locked ? 'tag-success' : 'tag-warning']"
-              >{{ s.locked ? '已完结' : '接龙中' }}</span>
-            </div>
-            <div class="story-card-body">
+            <router-link :to="`/story/${s.id}`" class="story-card-link">
+              <div class="story-card-header">
+                <h3 class="story-title">{{ s.title }}</h3>
+                <span
+                  :class="['tag', s.locked ? 'tag-success' : 'tag-warning']"
+                >{{ s.locked ? '已完结' : '接龙中' }}</span>
+              </div>
+              <div v-if="s.tags && s.tags.length > 0" class="story-tags">
+                <span
+                  v-for="t in s.tags"
+                  :key="t"
+                  class="tag tag-info story-tag"
+                  @click.stop="filterByTag(t)"
+                >#{{ t }}</span>
+              </div>
+              <div class="story-card-body">
               <div class="story-meta">
                 <span class="meta-item">
                   <span class="meta-icon">👥</span>
@@ -69,25 +88,26 @@
                   <span>{{ s.totalChars }}/{{ config?.maxCharsPerStory || 5000 }} 字</span>
                 </span>
               </div>
-              <div class="progress-wrap">
-                <div
-                  class="progress-bar"
-                  :style="{
-                    width: Math.min(
-                      Math.max(
-                        (s.participantCount / (config?.maxParticipants || 10)) * 100,
-                        (s.totalChars / (config?.maxCharsPerStory || 5000)) * 100
-                      ),
-                      100
-                    ) + '%'
-                  }"
-                ></div>
+                <div class="progress-wrap">
+                  <div
+                    class="progress-bar"
+                    :style="{
+                      width: Math.min(
+                        Math.max(
+                          (s.participantCount / (config?.maxParticipants || 10)) * 100,
+                          (s.totalChars / (config?.maxCharsPerStory || 5000)) * 100
+                        ),
+                        100
+                      ) + '%'
+                    }"
+                  ></div>
+                </div>
               </div>
-            </div>
-            <div class="story-card-footer">
-              <span class="time">更新于 {{ formatTime(s.updatedAt) }}</span>
-            </div>
-          </router-link>
+              <div class="story-card-footer">
+                <span class="time">更新于 {{ formatTime(s.updatedAt) }}</span>
+              </div>
+            </router-link>
+          </div>
         </div>
       </section>
     </div>
@@ -108,6 +128,31 @@
               <label>你的笔名</label>
               <input v-model="form.author" placeholder="请输入笔名..." maxlength="20" />
             </div>
+          </div>
+          <div class="form-group">
+            <label>故事标签 <span class="hint-inline">（最多5个，回车或逗号分隔）</span></label>
+            <div class="tag-input-wrap">
+              <div class="tag-list">
+                <span
+                  v-for="(t, idx) in form.tags"
+                  :key="idx"
+                  class="tag tag-info input-tag"
+                >
+                  #{{ t }}
+                  <button class="tag-remove" @click="removeTag(idx)">×</button>
+                </span>
+              </div>
+              <input
+                v-model="tagInput"
+                class="tag-input"
+                placeholder="输入标签后回车..."
+                maxlength="10"
+                @keydown.enter.prevent="addTag"
+                @keydown.,="addTag"
+                @keydown.，="addTag"
+              />
+            </div>
+            <div class="hint">{{ form.tags.length }}/5 个标签，单个标签不超过10字</div>
           </div>
           <div class="form-group">
             <label>开篇内容</label>
@@ -135,31 +180,68 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api.js'
 import { formatTime } from '../utils.js'
 
 const router = useRouter()
+const route = useRoute()
 const stories = ref([])
 const config = ref(null)
 const loading = ref(false)
 const showCreate = ref(false)
 const submitting = ref(false)
 const submitError = ref('')
+const tagInput = ref('')
+const activeTag = ref('')
 const form = ref({
   title: '',
   author: '',
-  content: ''
+  content: '',
+  tags: []
 })
 
 const ongoingCount = computed(() => stories.value.filter(s => !s.locked).length)
 const lockedCount = computed(() => stories.value.filter(s => s.locked).length)
 
+function addTag() {
+  const t = tagInput.value.trim().replace(/^#/, '')
+  if (!t) return
+  if (form.value.tags.includes(t)) {
+    tagInput.value = ''
+    return
+  }
+  if (form.value.tags.length >= 5) {
+    submitError.value = '最多只能添加5个标签'
+    tagInput.value = ''
+    return
+  }
+  form.value.tags.push(t)
+  tagInput.value = ''
+  submitError.value = ''
+}
+
+function removeTag(idx) {
+  form.value.tags.splice(idx, 1)
+}
+
+function filterByTag(tag) {
+  activeTag.value = tag
+  router.push({ query: { tag } })
+  loadData()
+}
+
+function clearTag() {
+  activeTag.value = ''
+  router.push({ query: {} })
+  loadData()
+}
+
 async function loadData() {
   loading.value = true
   try {
-    const [list, cfg] = await Promise.all([api.getStories(), api.getConfig()])
+    const [list, cfg] = await Promise.all([api.getStories(activeTag.value), api.getConfig()])
     stories.value = list
     config.value = cfg
   } catch (e) {
@@ -188,10 +270,11 @@ async function handleCreate() {
     const story = await api.createStory({
       title: form.value.title.trim(),
       author: form.value.author.trim(),
-      content: form.value.content.trim()
+      content: form.value.content.trim(),
+      tags: form.value.tags
     })
     showCreate.value = false
-    form.value = { title: '', author: '', content: '' }
+    form.value = { title: '', author: '', content: '', tags: [] }
     router.push(`/story/${story.id}`)
   } catch (e) {
     submitError.value = e.message
@@ -200,7 +283,20 @@ async function handleCreate() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  const tagFromQuery = route.query.tag
+  if (tagFromQuery) {
+    activeTag.value = tagFromQuery
+  }
+  loadData()
+})
+
+watch(() => route.query.tag, (newTag) => {
+  if (newTag !== activeTag.value) {
+    activeTag.value = newTag || ''
+    loadData()
+  }
+})
 </script>
 
 <style scoped>
@@ -269,8 +365,50 @@ onMounted(loadData)
   margin-bottom: 16px;
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .section-header h2 {
   font-size: 20px;
+}
+
+.active-tag-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.active-tag-label {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.active-tag {
+  font-size: 13px;
+}
+
+.clear-tag-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-tag-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text);
 }
 
 .story-grid {
@@ -290,11 +428,19 @@ onMounted(loadData)
   cursor: pointer;
 }
 
+.story-card-link {
+  display: block;
+  color: inherit;
+}
+
+.story-card-link:hover {
+  color: inherit;
+}
+
 .story-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-lg);
   border-color: var(--primary-light);
-  color: var(--text);
 }
 
 .story-card-header {
@@ -309,6 +455,95 @@ onMounted(loadData)
   font-size: 17px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.story-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.story-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.story-tag:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+}
+
+.hint-inline {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tag-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  min-height: 44px;
+  transition: border-color 0.2s;
+}
+
+.tag-input-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.input-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+  width: auto;
+  height: auto;
+}
+
+.tag-remove:hover {
+  opacity: 1;
+}
+
+.tag-input {
+  border: none;
+  outline: none;
+  padding: 4px;
+  font-size: 13px;
+  min-width: 100px;
+  flex: 1;
+  background: transparent;
+  box-shadow: none;
+  width: auto;
+}
+
+.tag-input:focus {
+  border: none;
+  box-shadow: none;
 }
 
 .story-meta {

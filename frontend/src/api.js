@@ -15,7 +15,7 @@ request.interceptors.response.use(
 
 export const api = {
   getConfig: () => request.get('/config'),
-  getStories: () => request.get('/stories'),
+  getStories: (tag) => request.get('/stories', { params: tag ? { tag } : {} }),
   getStory: (id) => request.get(`/stories/${id}`),
   createStory: (data) => request.post('/stories', data),
   addEntry: (id, data) => request.post(`/stories/${id}/entries`, data),

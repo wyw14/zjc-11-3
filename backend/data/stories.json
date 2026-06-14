@@ -37,6 +37,30 @@
       "participantCount": 1,
       "locked": false,
       "lockedReason": null
+    },
+    "mqeezcvje8d009": {
+      "id": "mqeezcvje8d009",
+      "title": "森林冒险记",
+      "tags": [
+        "冒险",
+        "森林",
+        "奇幻"
+      ],
+      "createdAt": 1781479641583,
+      "updatedAt": 1781479641583,
+      "entries": [
+        {
+          "id": "mqeezcvjcb6ryg",
+          "author": "探险家",
+          "content": "清晨的森林里弥漫着淡淡的雾气...",
+          "order": 1,
+          "createdAt": 1781479641583
+        }
+      ],
+      "totalChars": 17,
+      "participantCount": 1,
+      "locked": false,
+      "lockedReason": null
     }
   }
 }
